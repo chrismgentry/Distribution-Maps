@@ -1,5 +1,4 @@
-# Working with Remote Data, APIs, 
-# and Simple Distribution Models
+# Working with Remote Data, APIs, and Simple Distribution Models
 
 Species Distribution Exercise for BIOL 5700, Advanced Data Analytics<br></br>
 
