@@ -5,4 +5,7 @@
 .Renviron
 *.Rproj
 *.R
-Ex_10.Rmd
+/Images
+/Data
+*.nb.html
+*.xlsx
