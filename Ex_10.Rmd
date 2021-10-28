@@ -3,7 +3,7 @@ title: External Data, Distribution Networks, and Simple Species Distribution Mod
   Data Analytics</small></br>
 author: "Austin Peay State University"
 output:
-  html_notebook:
+  html_document: 
     df_print: paged
     rows.print: 10
     theme: cosmo
@@ -14,9 +14,16 @@ output:
       collapsed: no
       smooth_scroll: yes
   pdf_document: default
-  html_document:
-    toc: yes
+  html_notebook:
     df_print: paged
+    rows.print: 10
+    theme: cosmo
+    highlight: breezedark
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
 editor_options:
   chunk_output_type: inline
   mode: gfm
@@ -394,4 +401,4 @@ leaflet() %>%
 ```
 
 # YOUR TURN!
-Now it's your turn! Although some of this might not be applicable to your thesis research, try this information out on a dataset of your choice from any of the sources above. If you can apply this to your thesis, then add it to your website! Otherwise create a new repository for your work on Thursday.
+Now it's your turn! Although some of this might not be applicable to your thesis research, try this information out on a dataset of your choice from any of the sources above. If you can apply this to your thesis, then add it to your website! Otherwise create a new repository for your work on Thursday. Hint: If uploading this as a project to GitHub be sure to add the bioclim folder to your \*.gitignore file to avoid errors relating to the size of folder exceeding GitHub standards.
