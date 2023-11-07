@@ -7,5 +7,11 @@
 *.R
 /Images
 /Data
+/Ex_10_files
+/wc2-5
 *.nb.html
 *.xlsx
+*.csv
+previous_index.html
+previous_previous_index.html
+*.zip

@@ -77,7 +77,7 @@ In this exercise you will examine ways to connect to external data sources such 
 There are several packages that allow you to connect to external data sources as well as format and display the data you have collect. To begin this exercise, install the following:
 
 ```{r Packages, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
-packages<-c("cowplot","dismo","leaflet","maps","mapdata","OpenStreetMap","raster","rasterVis","readxl","rgbif","rgdal","tidyverse","utils")
+packages<-c("cowplot","dismo","leaflet","mapdata","OpenStreetMap","rasterVis","rdryad","rgbif","sf","tidyverse")
 sapply(packages, library, character.only=T)
 ```
 
@@ -85,33 +85,31 @@ sapply(packages, library, character.only=T)
 Often times you will find data available on websites or within a distributed data sources you want to include in your projects, but downloading and distributing the data with a markdown document or *R* script can be cumbersome. Additionally, the dataset may be large enough that it must be stored in your personal/business cloud storage for distribution even though it is already stored elsewhere on the web. Therefore, it is more convenient to connect to this data directly within your script and avoid secondary distribution all together. 
 
 ## Connecting to GitHub or other Websites
-For example, in the [last exercise](https://chrismgentry.github.io/Mapping-Basics/), two \*.kml files of the APSU campus were included in the data folder. If you wanted to use those in a new project you could download the data, include them in your data distribution, and remind users they must download the data in order for the script to work. Alternatively you could navigate to the [repository](https://github.com/chrismgentry/Mapping-Basics) and link directly to the data. To do this, you simply go to the **Data Folder** in the repository, click on the file you need, and click the **Raw** button along the top of the script window.
+For example, in a [previous exercise](https://chrismgentry.github.io/Mapping-Basics/), two \*.kml files of the APSU campus were included in the data folder. If you wanted to use those in a new project you could download the data, include them in your data distribution, and remind users they must download the data in order for the script to work. Alternatively you could navigate to the [repository](https://github.com/chrismgentry/Mapping-Basics) and link directly to the data. To do this, you simply go to the **Data Folder** in the repository, click on the file you need, and click the **Raw** button along the top of the script window.
 <p align="center">
 ![*Raw Button*](C:/Users/gentryc/Google Drive/APSU/Courses/BIOL 5700 Advanced Data Analytics/Exercise_10/raw_button.png "Raw Button")
 </p>
-Then you can copy the link at the top of the page to get direct access to the file. In this example, if you were to select the raw **Campus_Point.kml** file you would see a link that looks like this: https://raw.githubusercontent.com/chrismgentry/Mapping-Basics/master/Data/Campus_Points.kml The link will provide you access to that specific files from the repository. Now you can use that files in out new project.
+Then you can copy the link at the top of the page to get direct access to the file. In this example, if you were to select the raw **Campus_Point.kml** file you would see a link that looks like this: https://raw.githubusercontent.com/chrismgentry/Mapping-Basics/master/Data/Campus_Points.kml The link will provide you access to that specific files from the repository. Now you can use that file in our new project.
 
 So for this example you are going to recreate the simple static campus map you made in the previous exercise. To do that you will need to link to the raw *kml* file above.
 
 ```{r connect to kml, message=FALSE, warning=FALSE, echo = TRUE, results = 'hide'}
-campus.kml <- readOGR("https://raw.githubusercontent.com/chrismgentry/Mapping-Basics/master/Data/Campus_Points.kml")
+campus.kml <- st_read('https://raw.githubusercontent.com/chrismgentry/Mapping-Basics/master/Data/Campus_Points.kml')
 ```
 
 This simple line of code is all that is needed to create a spatialpointsdataframe object in our environment. To complete the map we can add the various aesthetics and options to create a custom look for your map.
 
 ```{r simple campus map, echo=TRUE, message=FALSE, warning=FALSE, fig.height=6, fig.width=8}
-campus_points <- cbind(campus.kml@data,campus.kml@coords)
-campus_points[2] <- NULL
-campus_points[4] <- NULL
-colnames(campus_points) <- c("name","x","y")
+campus.points <- campus.kml %>% mutate(x = unlist(map(campus.kml$geometry,1)),
+                                       y = unlist(map(campus.kml$geometry,2))) %>%
+                                st_drop_geometry(campus.kml)
 
-CampusMap <- openmap(c(36.5360,-87.3570),c(36.5300,-87.3495), type='bing')
-APSU <- openproj(CampusMap, projection = "+proj=longlat +ellps=WGS84 +units=m +no_defs")
+campus.map <- openmap(c(36.5360,-87.3570),c(36.5300,-87.3495), type='bing')
+APSU <- openproj(campus.map, projection = "+proj=longlat +ellps=WGS84 +units=m +no_defs")
 
 autoplot.OpenStreetMap(APSU) +
-  geom_point(data=campus_points, aes(x = x, y = y, color = name), size = 4, alpha = 0.8) +
-  geom_text(data=campus_points,aes(x = x, y = y, label = name), color="black", vjust=-0.60, size=4.01, fontface="bold") +
-  geom_text(data=campus_points,aes(x = x, y = y, label = name), color="white", vjust=-0.75, fontface="bold") +
+  geom_point(data=campus.points, aes(x = x, y = y, color = Name), size = 4, alpha = 0.8) +
+  geom_text(data=campus.points,aes(x = x, y = y, label = Name), color="white", vjust=-0.75, fontface="bold") +
   labs(x="Longtiude", y="Latitude") + theme(legend.position = "none")
 ```
 
@@ -125,13 +123,11 @@ Sites such as **GBIF** or **Dryad** aggregate data from scientists, governments,
 
 ### DISMO
 
-To start, we are going to use the ```dismo``` package to gain access to a simple **GBIF** dataset. Although this is slightly more complicated than linking to a ready-made dataset, sites like **GBIF** provide access to well nearly two billion records.
+To start, we are going to use the `dismo` package to gain access to a simple **GBIF** dataset. Although this is slightly more complicated than linking to a ready-made dataset, sites like **GBIF** provide access to well nearly two billion records.
 
 The first step in obtaining data is setting the extent of the bounding box for your search. While you can access global datasets, there are limits on the amount of information you can download and limitations on your local processing power that make doing so difficult. With the extent set, you provide the genus and species along with the following basic arguments:
 
 - geo: logical. If TRUE, only records that have a georeference (longitude and latitude values) will be downloaded
-
-- sp: logical. If TRUE, geo will return a SpatialPointsDataFrame
 
 - removeZeros: logical. If TRUE, all records that have a latitude OR longitude of zero will be removed if geo=TRUE; or set to NA if geo=FALSE. If FALSE, only records that have a latitude AND longitude that are zero will be removed or set to NA
 
@@ -140,25 +136,20 @@ The first step in obtaining data is setting the extent of the bounding box for y
 For this example you are going to obtain records for *Pinus longaeva* (Rocky Mountain Bristlecone Pine) within the western United States.
 
 ```{r dismo gbif data, echo=TRUE, message=FALSE, warning=FALSE}
-pilo_dismo <- gbif("pinus", species = "longaeva", ext = c(-130,-70,20,60),
-                   geo = TRUE, sp = TRUE, download = TRUE,
-                   removeZeros = TRUE)
+pilo.dismo <- gbif("pinus", species = "longaeva", ext = c(-130,-70,20,60),
+                   geo = TRUE, download = TRUE, removeZeros = TRUE)
 ```
 
-Once you have obtained the 1209 observations, the next step is to prepare it for display. To do this, we are going to create an x,y dataset, obtain a base map of the US, and create our map of known PILO stands in the west.
+Once you have obtained the observations, the next step is to prepare it for display. To do this, we are going to obtain a base map of the US, locate the x,y fields in the dataset, and create our map of known PILO stands in the west.
 
 ```{r simple dismo gbif map, echo=TRUE, message=FALSE, warning=FALSE, fig.height=6, fig.width=7}
-pilo_dismo_df <- cbind.data.frame(pilo_dismo@coords[,1],
-                                  pilo_dismo@coords[,2])
-
-colnames(pilo_dismo_df) <- c("x","y")
-
 us <- map_data("state")
 
-ggplot(data = pilo_dismo_df, aes(x=x, y=y)) +
+ggplot() +
   geom_polygon(data = us, aes(x=long, y = lat, group = group),
                fill = "white", color="black") +
-  geom_point() + xlab("Longitude") + ylab("Latitude") +
+  geom_point(data = pilo.dismo, aes(x=lon, y=lat)) + 
+  xlab("Longitude") + ylab("Latitude") +
   coord_fixed(xlim = c(-124,-110), ylim = c(35,45)) +
   xlab("Longitude") + ylab("Latitude") + ggtitle("Pinus longaeva Stands in the Western US") + 
   theme_bw() + theme(plot.title = element_text(hjust = 0.5)) + 
@@ -169,49 +160,46 @@ ggplot(data = pilo_dismo_df, aes(x=x, y=y)) +
 
 > Give it a shot! Change the species and extent information above to create a quick custom map of a species in your thesis or research project.
 
-This is a simple example of using the *GBIF* options in ```dismo``` to create a quick map of species locations. Be careful when using this sort of open data source. Quality control on the datasets might not be to the standard required for a robust research project as you will see in the next section. 
+This is a simple example of using the *GBIF* options in `dismo` to create a quick map of species locations. Be careful when using this sort of open data source. Quality control on the datasets might not be to the standard required for a robust research project as you will see in the next section. 
 
 ### RGBIF
 
-While the ```dismo``` package allowed you to create a quick species map, there were very few variables obtained with the data. Using ```rgbif``` will provide a more detailed look at the species by including additional attributes.
+While the `dismo` package allowed you to create a quick species map, there were only a few variables obtained with the data. Using `rgbif` will provide a more detailed look at the species by including additional attributes.
 
-For this part you will continue to look at Great Basin Bristlecone Pine so you can evaluate the differences in the type of data and distribution of PILO as compared to its relative the Rocky Mountain Bristlecone Pine _(Pinus aristata)_. To begin with you will use the ```occ_data``` function to set the _scientific name_, _bounding coordinates_, and coordinate requirements for PILO and PIAR on **GBIF**. In this instance a limit is set to only include up to the first 2000 records.
+For this part you will continue to look at Bristlecone Pine in the Great Basin so you can evaluate the differences in the type of data and distribution of PILO as compared to its relative Rocky Mountain Bristlecone Pine _(Pinus aristata)_. To begin with you will use the `occ_data` function to set the _scientific name_, _bounding coordinates_, and requirements for PILO and PIAR on **GBIF**. In this instance a limit is set to only include up to the first 2000 records.
 
 ```{r gbif lookup, echo=TRUE, message=FALSE, warning=FALSE}
-pilo_rgbif <- occ_data(scientificName = "Pinus longaeva",
-                 hasCoordinate = TRUE, limit = 2000,
-                 decimalLongitude = "-125, -65", 
-                 decimalLatitude = "24, 50")
+pilo.rgbif <- occ_data(scientificName = "Pinus longaeva",
+                       hasCoordinate = TRUE, limit = 2000,
+                       decimalLongitude = "-125, -65", 
+                       decimalLatitude = "24, 50")
 
-piar_rgbif <- occ_data(scientificName = "Pinus aristata",
+piar.rgbif <- occ_data(scientificName = "Pinus aristata",
                        hasCoordinate = TRUE, limit = 2000,
                        decimalLongitude = "-125, -65", 
                        decimalLatitude = "24, 50")
 ```
 
-In this instance you now have several different records for PILO and PIAR that includes more variables than the simple geographic data collected above with `dismo`. After examining the dataset, `view(pilo_rgbif`, it is determined that only a handful of the variables should be retained for further analysis. 
+In this instance you now have several different records for PILO and PIAR that includes more variables than the simple geographic data collected above with `dismo`. After examining the dataset, `View(pilo_rgbif)`, it is determined that only a handful of the variables should be retained for further analysis. 
 
 ```{r pilo piar data, echo=TRUE, message=FALSE, warning=FALSE}
-pilo_rgbif_df <- cbind.data.frame(pilo_rgbif$data$species,
-                                  pilo_rgbif$data$decimalLatitude,
-                                  pilo_rgbif$data$decimalLongitude,
-                                  pilo_rgbif$data$stateProvince,
-                                  pilo_rgbif$data$verbatimLocality)
+pilo.rgbif.df <- cbind.data.frame(pilo.rgbif$data$species,
+                                  pilo.rgbif$data$decimalLatitude,
+                                  pilo.rgbif$data$decimalLongitude,
+                                  pilo.rgbif$data$stateProvince,
+                                  pilo.rgbif$data$verbatimLocality)
 
-piar_rgbif_df <- cbind.data.frame(piar_rgbif$data$species,
-                                  piar_rgbif$data$decimalLatitude,
-                                  piar_rgbif$data$decimalLongitude,
-                                  piar_rgbif$data$stateProvince,
-                                  piar_rgbif$data$verbatimLocality)
+piar.rgbif.df <- cbind.data.frame(piar.rgbif$data$species,
+                                  piar.rgbif$data$decimalLatitude,
+                                  piar.rgbif$data$decimalLongitude,
+                                  piar.rgbif$data$stateProvince,
+                                  piar.rgbif$data$verbatimLocality)
 
-colnames(pilo_rgbif_df) <- c("species","y","x","state","location")
-colnames(piar_rgbif_df) <- c("species","y","x","state","location")
-
-pilo_rgbif_df <- pilo_rgbif_df[complete.cases(pilo_rgbif_df[1:4]),]
-piar_rgbif_df <- piar_rgbif_df[complete.cases(piar_rgbif_df[1:4]),]
+colnames(pilo.rgbif.df) <- c("species","y","x","state","location")
+colnames(piar.rgbif.df) <- c("species","y","x","state","location")
 ```
 
-There are a number of steps in this code to consider. The data obtained with ```rgbif``` is in a large gbif/tbl_df (S3) class. Because of the format, you need to use `cbind.data.frame` instead of the standard _cbind_ to ensure the data remains in the proper format. Next, each of the selected variables were renames. Finally, the first for columns in the dataset were scanned and any incomplete record was removed. You can see this simplified structure in the ```str(pilo_rgbif_df)``` dataset.
+There are a number of steps in this code to consider. The data obtained with ```rgbif``` is in a large gbif/tbl_df (S3) class. Because of the format, we will use `cbind.data.frame` instead of the standard _cbind_ to ensure the data remains in the proper format. Next, each of the selected variables were renamed. You can see this simplified structure in the ```str(pilo.rgbif.df)``` dataset.
 
 Now you are ready to finalize the aesthetics and options for displaying the new **gbif** data.
 
@@ -219,8 +207,8 @@ Now you are ready to finalize the aesthetics and options for displaying the new 
 ggplot() +
   geom_polygon(data = us, aes(x=long, y = lat, group = group),
                fill = "white", color="black") +
-  geom_point(data = pilo_rgbif_df, aes(x=x, y=y, color = species), size = 3) +
-  geom_point(data = piar_rgbif_df, aes(x=x, y=y, color = species), size = 3) +  
+  geom_point(data = pilo.rgbif.df, aes(x=x, y=y, color = species), size = 3) +
+  geom_point(data = piar.rgbif.df, aes(x=x, y=y, color = species), size = 3) +  
   coord_fixed(xlim = c(-124,-110), ylim = c(35,45)) +
   xlab("Longitude") + ylab("Latitude") + ggtitle("Bristlecone Stands in the Western US") + 
   guides(color=guide_legend("Legend", override.aes = list(size = 4))) +
@@ -232,20 +220,20 @@ ggplot() +
         panel.background = element_rect(fill = "lightblue"))
 ```
 
-It is here where you can see a potential issue with the data. By viewing the [Forest Service, Distribution and Occurrence](#https://www.fs.fed.us/database/feis/plants/tree/pinlon/all.html#DISTRIBUTION%20AND%20OCCURRENCE) information for Great Basin Bristlecone Pine you will see that it occurs "in a relatively narrow latitudinal range in California, Nevada, and Utah." This information seems to track with the visualization above. However, viewing the [same information](https://www.fs.fed.us/database/feis/plants/tree/pinari/all.html#DISTRIBUTION%20AND%20OCCURRENCE) for Rocky Mountain Bristlecone Pine you will find it "occurs in the southern Rocky Mountains of Colorado, New Mexico, and Arizona." However, the distribution of PIAR on the visualization above extends into Utah, Nevada, and California overlapping the range of PIAL. This underlys the importance of understanding the data you are workign with.
+It is here where you can see a potential issue with the data. By viewing the [Forest Service, Distribution and Occurrence](#https://www.fs.fed.us/database/feis/plants/tree/pinlon/all.html#DISTRIBUTION%20AND%20OCCURRENCE) information for Great Basin Bristlecone Pine you will see that it occurs "in a relatively narrow latitudinal range in California, Nevada, and Utah." This information seems to track with the visualization above. However, viewing the [same information](https://www.fs.fed.us/database/feis/plants/tree/pinari/all.html#DISTRIBUTION%20AND%20OCCURRENCE) for Rocky Mountain Bristlecone Pine you will find it "occurs in the southern Rocky Mountains of Colorado, New Mexico, and Arizona." However, the distribution of PIAR on the visualization above extends into Utah, Nevada, and California overlapping the range of PIAL. This underlies the importance of understanding the data you are working with.
 
-You could also use this data in ```leaflet``` to make an interactive version.
+You could also use this data in `leaflet` to make an interactive version.
 
 ```{r interactive gbif map, echo=TRUE, message=FALSE, warning=FALSE, fig.height=8, fig.width=10}
-colors <- colorFactor(c("#F8766D","#00BA38","#619CFF"), pilo_rgbif_df$state)
+colors <- colorFactor(c("#F8766D","#00BA38","#619CFF"), pilo.rgbif.df$state)
 
-leaflet(pilo_rgbif_df) %>% 
+leaflet(pilo.rgbif.df) %>% 
   addTiles() %>% 
-  addCircleMarkers(pilo_rgbif_df$x,
-                   pilo_rgbif_df$y,
-                   popup = pilo_rgbif_df$species,
+  addCircleMarkers(pilo.rgbif.df$x,
+                   pilo.rgbif.df$y,
+                   popup = pilo.rgbif.df$species,
                    weight = 2,
-                   color = colors(pilo_rgbif_df$state),
+                   color = colors(pilo.rgbif.df$state),
                    fillOpacity = 0.7) %>%
   addMiniMap(position = 'topright',
              width = 100, 
@@ -258,20 +246,20 @@ leaflet(pilo_rgbif_df) %>%
 
 > Data for this example is being downloaded from [Schile, Lisa et al. (2016), Abu Dhabi Blue Carbon project, Dryad, Dataset, https://doi.org/10.15146/R3K59Z](https://datadryad.org/stash/dataset/doi:10.15146%2FR3K59Z)
 
-You can download data directly from specific **Dryad** publications to import into your environment. While there is a ```dryad_download()``` command in the `rdryad` package that allows you to link to a specific dataset based on the doi, the function does not include robust features to allow for finite control for where an output file will be saved. So for this example you will use `download.file()`. This function will work regardless of the data format (\*.csv, \*.xlsx, \*.zip) you are linking to. If you are downloading a \*.zip file you will need to use the `unzip` package to open the data. For this example, the authors provided data a \*.xlsx file. Using `download.file` you will identify the link, destination path and file type, in mode information to ensure the file is opened for writing in binary mode.
+You can download data directly from specific **Dryad** publications to import into your environment. While there is a ```dryad_download()``` command in the `rdryad` package that allows you to link to a specific dataset based on the doi, the function does not include robust features to allow for finite control for where an output file will be saved. So for this example you will use `download.file()`. This function will work regardless of the data format (\*.csv, \*.xlsx, \*.zip) you are linking to. If you are downloading a \*.zip file you may need to use the `unzip` package to open the data. For this example, the authors provided data a \*.xlsx file. Using `download.file` you will identify the link, destination path and file type, in mode information to ensure the file is opened for writing in binary mode.
 
 ```{r dryad data, echo=TRUE, message=FALSE, warning=FALSE}
 carbon <- download.file("https://datadryad.org/stash/downloads/file_stream/140080", destfile = "./carbon.xlsx", mode = "wb")
 ```
 
-With this new dataset collected you have options on how to import the file into your project. Using the  ```readxl``` package you can click on the file dataset within the _files tab_ and choose **Import Dataset...** ![*Import Dataset*](C:/Users/gentryc/Google Drive/APSU/Courses/BIOL 5700 Advanced Data Analytics/Exercise_10/import_xlsx.png "Import Button") to use a GUI interface for importing. This will open a new window where you can give the object a name, select the specific sheet and use drop-down menus to change the type of data, or choose to skip it on import. When you have selected all of the appropriate options you can either select import or copy the code.
+With this new dataset collected you have options on how to import the file into your project. Using the  `readxl` package you can click on the file dataset within the _files tab_ and choose **Import Dataset...** ![*Import Dataset*](C:/Users/gentryc/Google Drive/APSU/Courses/BIOL 5700 Advanced Data Analytics/Exercise_10/import_xlsx.png "Import Button") to use a GUI interface for importing. This will open a new window where you can give the object a name, select the specific sheet and use drop-down menus to change the type of data, or choose to skip it on import. This can be beneficial when you need to review the dataset prior to importing to **R**. When you have selected all of the appropriate options you can either select import or copy the code and paste it into your script.
 
 <p align="center"><div class="zoom"><img src= "Images/readxl-import-options.png" alt="Import XLSX dataset" style="width:100%"></div></p>
 
 For this dataset the only necessary variables are: site, ecosystem, plot, core depth, latitude, and longitude. Either method above is acceptable for importing the data however only the code will be displayed below:
 
 ```{r import from readxl xlsx, echo=TRUE, message=FALSE, warning=FALSE}
-blue_carbon <- read_excel("carbon.xlsx", 
+carbon <- readxl::read_excel("carbon.xlsx", 
                           sheet = "plot information", 
                           col_types = c("skip","skip", "text", "text", 
                                         "numeric", "numeric", "skip", 
@@ -287,12 +275,12 @@ Notice in the script the specific sheet was identified and variables were either
 world <- map_data("worldHires")
 uae <-map_data("worldHires", "United Arab Emirates")
 
-main_map <- ggplot(blue_carbon, aes(Longitude, Latitude)) +
+main_map <- ggplot() +
   geom_polygon(data = world, aes(x=long, y = lat, group = group),
                fill = "gray", color="white") +
   geom_polygon(data = uae, aes(x=long, y = lat, group = group),
                fill = "white", color="black") +
-  geom_point(aes(color = Ecosystem, size = `core depth (cm)`)) +
+  geom_point(data = carbon, aes(Longitude, Latitude, color = Ecosystem, size = `core depth (cm)`)) +
   coord_fixed(xlim = c(51.5,56.5), ylim = c(23.5,26.5)) +
   xlab("Longitude") + ylab("Latitude") + ggtitle("Blue Carbon Project") + 
   guides(color=guide_legend("Ecosystems", override.aes = list(size = 3))) + 
@@ -308,7 +296,7 @@ main_map
 
 ## Creating an Inset Map
 
-Occasionally you may be interested in including a inset or indicator map on your visualization. These are smaller maps that are used to provide additional detail about a specific location. These maps are often small scale versions or the primary map, but sometimes can be larger scale to enhance detail in congested areas. In this case, the data is located in the United Arab Emirates. Because that area of the world is unfamilar to some, an inset map will help them locate it geographically. 
+Occasionally you may be interested in including a inset or indicator map on your visualization. These are smaller maps that are used to provide additional detail about a specific location. These maps are often small scale versions of the primary map, but sometimes can be larger scale to enhance detail in congested areas. In this case, the data is located in the United Arab Emirates. Because that area of the world is unfamiliar to some, an inset map will help them locate it geographically. 
 
 To begin this process you are going to create an additional ggplot object for countries of the world highlighting UAE.
 
@@ -322,7 +310,7 @@ inset <- ggplot() +
   theme(panel.background = element_rect(fill = "lightblue"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
         axis.line=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank(),axis.ticks=element_blank(), 
         axis.title.x=element_blank(), axis.title.y=element_blank()) +
-theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
 inset
 ```
 
@@ -330,8 +318,8 @@ To create an overlay of these two maps you will use `ggdraw` from the **cowplot*
 
 ```{r final map, echo=TRUE, message=FALSE, warning=FALSE}
 ggdraw() +
-draw_plot(main_map) + 
-draw_plot(inset, x = 0.024, y = 0.595, width = 0.25, height = 0.25)
+  draw_plot(main_map) + 
+  draw_plot(inset, x = 0.024, y = 0.595, width = 0.25, height = 0.25)
 ```
 
 # Simple Species Distribution Map
@@ -343,33 +331,34 @@ bioclim <- getData(name = "worldclim", res = 2.5, var = "bio", path = "./")
 
 names(bioclim) <- c("Ann Mean Temp","Mean Diurnal Range","Isothermality","Temperature Seasonality",
                     "Max Temp Warmest Mo","Min Temp Coldest Mo","Ann Temp Range","Mean Temp Wettest Qtr",
-                    "Mean Temp Driest Qtr","Mean Temp Warmest Qtr","Mean Temp Coldest Qtr","Annual Precip",
-                    "Precip Wettest Mo","Precip Driest Mo","Precip Seasonality","Precip Wettest Qtr",
-                    "Precip Driest Qtr","Precip Warmest Qtr","Precip Coldest Qtr")
+                    "Mean Temp Driest Qtr","Mean Temp Warmest Qtr","Mean Temp Coldest Qtr","Annual
+                    Precip","Precip Wettest Mo","Precip Driest Mo","Precip Seasonality","Precip Wettest
+                    Qtr","Precip Driest Qtr","Precip Warmest Qtr","Precip Coldest Qtr")
 
-bio_extent <- extent(x = c(
-  min(pilo_rgbif_df$x),
-  max(pilo_rgbif_df$x),
-  min(pilo_rgbif_df$y),
-  max(pilo_rgbif_df$y)))
+bio.extent <- extent(x = c(
+  min(pilo.rgbif.df$x),
+  max(pilo.rgbif.df$x),
+  min(pilo.rgbif.df$y),
+  max(pilo.rgbif.df$y)))
 
-bioclim_extent <- crop(x = bioclim, y = bio_extent)
-bioclim_model <- bioclim(x = bioclim_extent, p = cbind(pilo_rgbif_df$x,pilo_rgbif_df$y))
-presence_model <- dismo::predict(object = bioclim_model, 
-                                 x = bioclim_extent, 
-                                 ext = bio_extent)
+bioclim.extent <- crop(x = bioclim, y = bio.extent)
+
+bioclim.model <- bioclim(x = bioclim.extent, p = cbind(pilo.rgbif.df$x,pilo.rgbif.df$y))
+presence.model <- dismo::predict(object = bioclim.model, 
+                                 x = bioclim.extent, 
+                                 ext = bio.extent)
 ```
 
-In this script bioclimatic variable were generated and descriptive names were provided. Because the bioclimatic variables are global, an extent was created out of the PILO dataset to limit the analysis to their geographic range and the extent was used to crop the variables. Finally, a raster layer was created with a prediction based on the model object. To view that information on a map you can use the `gplot` function which is a wrapper for _ggplot_ from the **rasterVis** package.
+In this script bioclimatic variable were generated and descriptive names were provided. Because the bioclimatic variables are global, an extent was created out of the PILO dataset to limit the analysis to their geographic range and the extent was used to crop the variables. Finally, a raster layer was created with a prediction based on the model object. To view that information on a map you can use the `gplot` function which is a wrapper for _ggplot_ from the **rasterVis** package used to visualize raster opjects.
 
 ```{r species distribution maps, echo=TRUE, message=FALSE, warning=FALSE, fig.height=6, fig.width=10}
-gplot(presence_model) + 
+rasterVis::gplot(presence.model) + 
   geom_polygon(data = us, aes(x= long, y = lat, group = group),
                fill = "gray", color="black") +
   geom_raster(aes(fill=value)) +
   geom_polygon(data = us, aes(x= long, y = lat, group = group),
                fill = NA, color="black") +
-  geom_point(data = pilo_rgbif_df, aes(x = x, y = y), size = 2, color = "black", alpha = 0.5) +
+  geom_point(data = pilo.rgbif.df, aes(x = x, y = y), size = 2, color = "black", alpha = 0.5) +
   scale_fill_gradientn(colours=c("brown","yellow","darkgreen"), "Probability") +
   coord_fixed(xlim = c(-122.5,-110.5), ylim = c(36,42.5)) +
   xlab("Longitude") + ylab("Latitude") + ggtitle("Probability of PILO Occurrence") + 
@@ -379,16 +368,16 @@ gplot(presence_model) +
         panel.background = element_rect(fill = "lightblue"))
 ```
 
-Because this analysis included "the kitchen sink" of variables, the model could be better specified by removing variables that are unrelated to the growth response of PILO. Additionally you can see areas where PILO has a high probability of occurrence but is not present. In Arizona, this is the range of PIAR. You can also view this information in ```leaflet``` to examine the data interactively.
+This analysis included "the kitchen sink" of variables. The model could be better specified by removing variables that are unrelated to the growth response of PILO. Additionally you can see areas where PILO has a high probability of occurrence but is not present. In Arizona, this is the range of PIAR. You can also view this information in ```leaflet``` to examine the data interactively.
 
 ```{r leaflet species distribution, echo=TRUE, message=FALSE, warning=FALSE, fig.height=8, fig.width=10}
 colors <- c("brown","yellow","darkgreen")
 
 leaflet() %>% 
   addTiles() %>%
-  addRasterImage(presence_model, colors = colors, opacity = 0.8) %>%
-  addCircleMarkers(pilo_rgbif_df$x,
-                   pilo_rgbif_df$y,
+  addRasterImage(presence.model, colors = colors, opacity = 0.8) %>%
+  addCircleMarkers(pilo.rgbif.df$x,
+                   pilo.rgbif.df$y,
                    weight = 1,
                    color = "grey",
                    fillColor = "green",
