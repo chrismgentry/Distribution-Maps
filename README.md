@@ -1,6 +1,6 @@
-# Working with Remote Data, APIs, and Simple Distribution Models
+# Working with Remote Data, Distribution Networks, and Simple Species Distribution Models
 
-Species Distribution Exercise for BIOL 5700, Advanced Data Analytics<br></br>
+Species Distribution Exercise for BIOL 5660, Advanced Data Analytics<br></br>
 
 This exercise will provide information for using R to connect to remote datasets, work with APIs, and create basic species distribution models. <br></br>
 
@@ -17,7 +17,6 @@ Below you will find resources and tutorials with will provide assistance with th
 - https://cran.r-project.org/web/packages/dismo/dismo.pdf
 - https://cran.r-project.org/web/packages/rdryad/rdryad.pdf
 - https://cran.r-project.org/web/packages/rgbif/rgbif.pdf
-- https://cran.r-project.org/web/packages/spotifyr/spotifyr.pdf #just for fun
 
 ## Tutorials
 - https://cran.r-project.org/web/packages/dismo/vignettes/sdm.pdf
